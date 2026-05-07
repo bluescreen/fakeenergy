@@ -1,0 +1,68 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "rules": {
+    "@next/next/no-img-element": "warn",
+    "react/no-unescaped-entities": "off",
+
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-new-func": "error",
+    "no-script-url": "error",
+    "no-debugger": "warn",
+    "no-alert": "warn",
+
+    "no-useless-catch": "warn",
+    "no-empty": ["warn", { "allowEmptyCatch": false }],
+    "no-throw-literal": "warn",
+
+    "no-warning-comments": ["warn", { "terms": ["todo", "fixme", "hack", "xxx"], "location": "anywhere" }],
+
+    "complexity": ["warn", 8],
+    "max-lines": ["warn", { "max": 300, "skipBlankLines": true, "skipComments": true }],
+    "max-lines-per-function": ["warn", { "max": 50, "skipBlankLines": true, "skipComments": true, "IIFEs": true }],
+    "max-depth": ["warn", 4],
+    "max-nested-callbacks": ["warn", 3],
+    "max-params": ["warn", 4],
+    "max-statements": ["warn", 20],
+
+    "no-magic-numbers": ["warn", {
+      "ignore": [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 20, 24, 30, 50, 60, 100, 1000, 60000, 86400, 1000000],
+      "ignoreArrayIndexes": true,
+      "ignoreDefaultValues": true,
+      "ignoreClassFieldInitialValues": true,
+      "enforceConst": true,
+      "detectObjects": false
+    }],
+    "eqeqeq": ["warn", "smart"],
+    "no-var": "warn",
+    "prefer-const": "warn",
+    "no-implicit-coercion": "warn",
+    "no-await-in-loop": "warn",
+    "no-async-promise-executor": "warn",
+    "require-await": "warn",
+
+    "no-restricted-globals": ["warn", { "name": "fetch", "message": "Use a wrapper that adds timeout + error handling instead of bare fetch." }],
+    "no-restricted-syntax": [
+      "warn",
+      { "selector": "ImportDeclaration[specifiers.0.type='ImportNamespaceSpecifier']", "message": "Avoid wildcard imports — name what you use." },
+      { "selector": "CallExpression[callee.name='eval']", "message": "eval() is forbidden." },
+      { "selector": "CallExpression[callee.property.name='innerHTML']", "message": "Avoid setting innerHTML; use textContent or a sanitizer." }
+    ],
+
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-non-null-assertion": "warn",
+    "@typescript-eslint/ban-ts-comment": ["warn", { "ts-expect-error": false, "ts-ignore": true, "ts-nocheck": true, "ts-check": false }],
+    "@typescript-eslint/consistent-type-assertions": ["warn", { "assertionStyle": "as", "objectLiteralTypeAssertions": "never" }],
+    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "@typescript-eslint/no-empty-function": "warn",
+    "@typescript-eslint/no-empty-interface": "warn",
+    "@typescript-eslint/no-inferrable-types": "off"
+  },
+  "ignorePatterns": [
+    ".next/",
+    "node_modules/",
+    "src/lib/analytics.ts",
+    "src/lib/__tests__/electricity.test.ts"
+  ]
+}

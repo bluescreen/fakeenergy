@@ -1,0 +1,31 @@
+---
+description: Security and productivity baseline (managed by make init)
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Make-first rule
+Prefer Makefile targets for build/run/test/scan/init operations. If the task isn't covered by a target, **stop and ask the user for permission** before invoking the underlying tool (mvn/npm/docker/git/etc.) directly. Do not bypass the Makefile to "save a step".
+
+# Token economy
+- Skip preambles ("I'll now…", "Let me…"); execute first, narrate sparingly.
+- Cite by `path:line`; don't paste large file contents back.
+- Silent success = success — don't echo "done" or re-summarize what the diff shows.
+- Batch related tool calls in one round-trip; avoid read-think-read loops.
+- Prefer `grep` / `make detect-stack` / `make ai-ready` over reading multiple files.
+- Don't re-run a command that just succeeded; trust the exit code.
+
+# Never read or write
+- `.env`, `.env.*`
+- `secrets/**`
+- `**/*.pem`, `**/*.key`, `**/id_rsa*`
+- `**/credentials*.json`, `**/*.kdbx`, `**/*.p12`, `**/*.pfx`
+
+# Never run
+- `rm -rf`, `rm -fr`
+- `git push --force`, `git push -f`, `git push --force-with-lease`
+- `git reset --hard`, `git clean -fd[x]`, `git checkout -- .`, `git restore .`
+- `git commit --no-verify`, `git commit -n`
+- `sudo`, `chmod 777`
+- `curl ... | sh`, `curl ... | bash`, `wget ... | sh`, `wget ... | bash`

@@ -1,0 +1,31 @@
+{
+  "name": "fakeenergy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Intentionally-sloppy Next.js fixture for slop-cleaner calibration. Energy dashboard (electricity, gas, solar, heat).",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "next": "^14.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitest/coverage-v8": "^1.6.1",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.1"
+  }
+}
