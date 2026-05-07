@@ -38,7 +38,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <h2 className="section-title">Unsere Tarife</h2>
+      <h2 className="section-title">Unsere TARRRIIIFFEEE</h2>
       <section className="card-grid">
         <EnergyCard source="electricity" content={electricityContent} />
         <EnergyCard source="gas" content={gasContent} />
