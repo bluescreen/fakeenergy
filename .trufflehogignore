@@ -1,0 +1,15 @@
+target/
+node_modules/
+.next/
+.nuxt/
+dist/
+build/
+out/
+.cache/
+logs/
+.git/
+vendor/
+.venv/
+__pycache__/
+.mvn/wrapper/maven-wrapper.jar
+.env.schema

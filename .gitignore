@@ -1,0 +1,49 @@
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+.env*.local
+.DS_Store
+
+
+# BEGIN: makefile-managed (make init-gitignore)
+# secrets — never commit
+.env
+.env.*
+!.env.example
+!.env.schema
+*.pem
+*.key
+id_rsa*
+*.p12
+*.pfx
+*.kdbx
+secrets/
+credentials*.json
+# logs / runtime
+logs/
+*.log
+.app.pid
+# scrub-history work files (raw secrets until pushed; never commit)
+.scrub/
+# build output
+target/
+node_modules/
+.next/
+.nuxt/
+dist/
+build/
+out/
+.cache/
+vendor/
+.venv/
+__pycache__/
+*.pyc
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+# END: makefile-managed

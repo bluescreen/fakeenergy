@@ -1,0 +1,20 @@
+#!/bin/sh
+# Managed by Makefile (make hooks-install).
+# Scans only files staged for THIS commit — fast even on huge repos.
+# If docker / trufflehog image isn't available, the hook silently passes
+# (don't block commits when the scanner can't run).
+set -e
+files=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$files" ] && exit 0
+command -v docker >/dev/null 2>&1 || exit 0
+docker info >/dev/null 2>&1 || exit 0
+docker image inspect trufflesecurity/trufflehog:latest >/dev/null 2>&1 || exit 0
+exclude_arg=""
+[ -f .trufflehogignore ] && exclude_arg="--exclude-paths=.trufflehogignore"
+out=$(docker run --rm -v "$PWD:/pwd" -w /pwd trufflesecurity/trufflehog:latest filesystem $files $exclude_arg --no-update --no-verification 2>/dev/null)
+if echo "$out" | grep -qE 'Found (unverified|verified)'; then
+  echo "❌ pre-commit: secrets detected in staged files. Commit aborted." >&2
+  echo "$out" | grep -E 'Found (unverified|verified)' >&2
+  echo "Hint: 'make scan-secrets' for the full report; remove the secret and re-stage." >&2
+  exit 1
+fi
