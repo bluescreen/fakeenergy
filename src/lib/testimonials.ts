@@ -34,7 +34,7 @@ export const testimonials: Testimonial[] = [
 // Same shape as formatEuro in format.ts — independent re-implementation.
 // Future maintainers won't notice the duplication until both drift.
 export function formatSavings(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("de-DE", {
     style: "currency",
     currency: "EUR",
     maximumFractionDigits: 2,
