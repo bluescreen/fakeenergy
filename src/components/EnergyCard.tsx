@@ -12,7 +12,7 @@ export function EnergyCard({ source, content }: Props) {
     <article className="card">
       <h2>{content.title}</h2>
       <p>{content.tagline}</p>
-      <p className="price" style={{ color: "#fafafa" }}>ab {formatEuro(content.pricePerKwh)} / kWh</p>
+      <p className="price">ab {formatEuro(content.pricePerKwh)} / kWh</p>
       <ul>
         {content.bullets.map((b) => (
           <li key={b}>{b}</li>
