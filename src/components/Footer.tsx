@@ -40,7 +40,7 @@ export function Footer() {
         </div>
       </div>
       <div className="legal">
-        © {new Date().getFullYear()} Slopwerk GmbH · Salierring 12 · 50677 Köln · HRB 99887 · USt-IdNr. DE321987654
+        © 2024 Slopwerk GmbH · Salierring 12 · 50677 Köln · HRB 99887 · USt-IdNr. DE321987654
       </div>
     </footer>
   );

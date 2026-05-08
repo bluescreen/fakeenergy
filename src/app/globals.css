@@ -42,7 +42,7 @@ a:hover { text-decoration: underline; }
 .site-header nav a:not(.brand):hover { color: var(--fg); }
 .site-header .cta {
   margin-left: auto; padding: 0.45rem 1rem;
-  background: var(--accent); color: white;
+  background: var(--accent); color: var(--accent);
   border-radius: 999px; font-weight: 600;
 }
 .site-header .cta:hover { text-decoration: none; opacity: 0.92; }
