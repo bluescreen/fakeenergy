@@ -47,3 +47,5 @@ __pycache__/
 .DS_Store
 Thumbs.db
 # END: makefile-managed
+docs/repro-screenshots/*
+/.claude/worktrees

@@ -1,9 +1,11 @@
 ---
 name: auto-fix-loop
-description: Spawn one autonomous bug-fix agent per in-progress ticket. Each agent triages, reproduces, fixes, adversarial-reviews, and opens a draft PR — all on its own git worktree, in parallel. Logs progress to ~/.denkvis/memory/. Use when the user says "/auto-fix-loop", "fix all the in-progress tickets autonomously", "send the fleet", "do the whole loop", or "ship the in-progress tickets".
+description: Spawn one autonomous bug-fix agent per open ticket, each on its own git worktree, in parallel. Three tiered pathways (fast / standard / heavy) sized to the bug. Each agent triages, reproduces, fixes, adversarial-reviews when the pathway demands it, and opens a draft PR. Logs progress to ~/.denkvis/memory/. Use when the user says "/auto-fix-loop", "fix all the in-progress tickets autonomously", "send the fleet", "do the whole loop", or "ship the in-progress tickets".
 ---
 
 # auto-fix-loop
+
+**Version: v1.2** (tiered pathways: fast / standard / heavy)
 
 End-to-end autonomous bug-fix orchestration. One general-purpose
 sub-agent per ticket. Each runs in its own git worktree, follows
@@ -37,46 +39,129 @@ access in sub-agent context). Instead, this skill inlines the
 core recipe from each into the worker's prompt and runs them
 sequentially per ticket inside the worker.
 
+## Pathways
+
+Three tiers, sized to the bug. The orchestrator picks one per
+ticket from title/body keywords; the worker may downgrade or
+escalate after Phase 1 if the hypothesis demands it.
+
+| Pathway      | Best for                                              | Reproducer                  | Diff cap   | Adversarial review     | Phases run         |
+|--------------|-------------------------------------------------------|-----------------------------|------------|------------------------|--------------------|
+| **fast**     | typo, copy, label, CSS, rename                        | grep before/after           | ≤ 3 lines  | skipped                | 0, 1, 4, 5, 7–9    |
+| **standard** (default) | logic bugs in one or two files               | failing vitest              | ≤ 10 lines | required               | 0–9 (full recipe)  |
+| **heavy**    | races, multi-file, intermittent, architectural risk   | failing vitest + bisect/triangulation | ≤ 30 lines | required + triangulation | 0–9 + Phase 1.5 (bisect-symptom) |
+
+**Picking heuristics (orchestrator):**
+
+- **fast** if the ticket title/body matches any of: `typo`,
+  `tippfehler`, `copy`, `wording`, `text`, `label`, `string`,
+  `umbenennen`, `rename`, `placeholder`, `padding`, `margin`,
+  `color`, `farbe`, `font`, `align`, `width`, `height`.
+- **heavy** if the ticket title/body matches any of: `race`,
+  `concurrency`, `intermittent`, `flaky`, `multi-file`,
+  `architecture`, `cascade`, `unter last`, `under load`,
+  `nondeterministic`, `random failure`.
+- otherwise **standard**.
+
+**Worker-side escalation rules** (append `pathway change: <from> →
+<to>: <reason>` to the run log when triggered):
+
+- **fast → standard** if Phase 1 hypothesis names a logic
+  branch, math, or state mutation (not just a string/CSS edit),
+  OR if the planned diff exceeds the 3-line cap.
+- **standard → heavy** if the diff would touch more than three
+  files, OR Phase 1 surfaces concurrency/timing language, OR
+  three hypotheses fail in a row.
+- **Downgrades are not permitted** without orchestrator
+  confirmation — workers may only escalate. (Sandbagging into a
+  cheaper lane masks risk.)
+
+The fast lane skips the failing-vitest contract on purpose, but
+**not** the evidence contract: a fast-lane worker must still
+produce a `grep` before the fix that proves the bug is present
+(the wrong string is in the file) and a `grep` after the fix that
+proves it is gone. No grep-evidence pair, no PR.
+
 ## Inputs
 
-- **No required argument:** default scope is all in-progress
-  tickets via the same source detection as `ticket-triage`
-  (origin on github.com → label `in-progress`; else Atlassian
-  MCP → status `In Progress`).
+- **No required argument:** default scope is **all open / not-done
+  tickets** via the same source detection as `ticket-triage`
+  (origin on github.com → `gh issue list --state open`; else
+  Atlassian MCP → JQL `statusCategory != Done`).
 - **Optional flags in the argument string:**
   - `--max=N` parallel cap (default 5)
   - `--source=jira|github` force source detection
   - `--dry` show the plan, confirm with the user, do not spawn
+  - `--in-progress` narrow back to only `in-progress`-labelled
+    GitHub issues / `In Progress` Jira tickets (the pre-v1.1
+    default)
+  - `--pathway=fast|standard|heavy` force one pathway across
+    every ticket in this run, overriding the classifier (useful
+    for "force fast on the whole queue" trial runs)
 
 ## Procedure
 
+### 0. Print version banner
+
+Before any other output, print exactly one line so the user can
+see which build of the skill is running:
+
+    auto-fix-loop v1.2 — tiered pathways (fast / standard / heavy)
+
+Bump the version when you change the procedure or worker
+contract; keep the banner one line.
+
 ### 1. Discover scope
 
-Use the same source detection as `ticket-triage`. Fetch tickets,
-normalise each to:
+Use the same source detection as `ticket-triage`. Fetch **all
+open / not-done tickets** — do not filter by an `in-progress`
+label or `In Progress` status. Specifically:
+
+- GitHub: `gh issue list --state open` (no label filter).
+- Jira: JQL `statusCategory != Done` (i.e. To Do + In Progress,
+  excludes Done/closed).
+
+Normalise each to:
 
     { key, title, body, source, browseUrl }
 
 If empty, report and stop with the same message
-`ticket-triage` uses for empty scope. Do not silently fall back
-to To Do or unlabelled tickets.
+`ticket-triage` uses for empty scope.
 
-### 2. Summarise and confirm
+### 2. Classify each ticket
+
+For each ticket, apply the **Pathways** picking heuristics above
+to assign one of `fast | standard | heavy`. The classifier reads
+title + body only; do not crack open the codebase to classify
+(workers do that themselves in Phase 1).
+
+If `--pathway=<x>` was passed, every ticket gets `<x>` regardless
+of its text — record `pathway override (--pathway=<x>): <key>` in
+the run log header so the override is auditable.
+
+If a ticket matches both fast and heavy keywords (e.g., "rename
+under load"), heavy wins — escalation is cheap, missed risk is
+not.
+
+### 3. Summarise and confirm
 
 Print one summary block per ticket (4-6 lines, stripped of
 misdirection — same shape as `ticket-triage`'s summarise step).
+Include the assigned pathway as the first metadata line, e.g.
+
+    [fast] KAN-12 — "Typo on solar landing"
 
 Then ask, exactly:
 
 > "Spawn N autonomous bug-fix agents in parallel on these
-> ticket(s)? Each one will open its own draft PR. Each typically
-> burns 3-5 minutes of wall clock and 30-60 sub-tool calls.
-> (yes / no / pick subset)"
+> ticket(s)? Pathway breakdown: F fast / S standard / H heavy.
+> Each typically burns 1 min (fast) / 3-5 min (standard) /
+> 5-10 min (heavy) of wall clock. (yes / no / pick subset)"
 
 Stop on no. On `pick subset`, fan out only on the chosen keys.
 The cost gate exists because N parallel agents is expensive.
 
-### 3. Prepare the run log
+### 4. Prepare the run log
 
 Compute run ID: `auto-fix-<UTC-isoZ-no-colons>`, e.g.
 `auto-fix-2026-05-07T203015Z`.
@@ -95,7 +180,9 @@ Create directories with `mkdir -p`. Write the run header:
     # <run-id>
 
     - Source: github | jira
-    - Tickets: <comma-separated keys>
+    - Tickets: <comma-separated keys with pathway tags, e.g. `KAN-3 [standard], KAN-12 [fast]`>
+    - Pathway breakdown: F=<n> S=<n> H=<n>
+    - Pathway override: <none | --pathway=<x>>
     - Started: <iso>
     - Status: in-progress
 
@@ -105,25 +192,28 @@ Each worker appends its own block here. The orchestrator never
 edits worker entries; on completion it appends only a `## Summary`
 block at the bottom and updates `Status:` in the header.
 
-### 4. Fan out
+### 5. Fan out
 
 For each ticket, in the **same response**, call `Agent` with:
 
 - `subagent_type`: `general-purpose`
 - `isolation`: `"worktree"` — each worker gets its own checkout
-- `description`: `"auto-fix <KEY>"`
-- `model`: `sonnet` (cheaper than opus, sufficient for the recipe;
-  drop to `haiku` to halve cost again at the price of weaker
-  reasoning on the harder bugs — recommended only when the queue
-  is the easy-win subset)
+- `description`: `"auto-fix <KEY> [<pathway>]"`
+- `model`: pick by pathway —
+  - `fast` → `haiku` (the recipe is mostly grep + edit + npm test;
+    cheap reasoning is enough)
+  - `standard` → `sonnet` (default; balanced cost vs. depth)
+  - `heavy` → `sonnet` (or `opus` if the queue is small and the
+    bugs are gnarly; opus only when the user explicitly opts in,
+    because cost ramps fast)
 - `prompt`: the worker template below, with `{KEY}`, `{TITLE}`,
-  `{BODY}`, `{SOURCE}`, `{BROWSE_URL}`, `{RUN_LOG_PATH}`
-  substituted literally.
+  `{BODY}`, `{SOURCE}`, `{BROWSE_URL}`, `{RUN_LOG_PATH}`,
+  `{PATHWAY}` substituted literally.
 
 Cap at `--max` parallel. If more tickets than the cap, batch in
 waves. Wait for each wave before the next.
 
-### 5. Aggregate
+### 6. Aggregate
 
 When the last worker returns, read the run-log file. Each worker
 left an append block. Render to the user as one row per ticket:
@@ -157,8 +247,9 @@ without needing to coordinate with siblings.
 > You are an autonomous bug-fix agent for {SOURCE} ticket
 > **{KEY}** on the fakeenergy Next.js project. You run inside
 > your own git worktree — commit and push freely, you will not
-> step on sibling agents. Your job: triage, reproduce, fix,
-> self-review, open a draft PR, record what happened.
+> step on sibling agents. Your job: triage, reproduce (per the
+> pathway), fix, self-review (per the pathway), open a draft PR,
+> record what happened.
 >
 > **Ticket title:** {TITLE}
 >
@@ -169,9 +260,63 @@ without needing to coordinate with siblings.
 > **Run log:** {RUN_LOG_PATH} (append-only; never edit other
 > agents' lines)
 >
+> **Pathway:** {PATHWAY} (one of `fast | standard | heavy`).
+> Pathway gates the work you do:
+>
+> - **fast:** skip Phase 2 (vitest) and Phase 6 (adversarial).
+>   Reproducer = pre-fix grep evidence + post-fix grep evidence
+>   that the wrong text/style is present then gone. Diff cap
+>   3 lines. If your hypothesis names a logic branch, math, or
+>   state mutation rather than a string/CSS/label change, OR if
+>   the planned diff exceeds 3 lines, **escalate to standard**
+>   and append `pathway change: fast → standard: <reason>`.
+> - **standard:** full Phase 0–9 recipe. Vitest reproducer,
+>   adversarial review required. Diff cap 10 lines. If the diff
+>   would touch more than three files, OR three hypotheses fail
+>   in a row, OR Phase 1 surfaces concurrency/timing language,
+>   **escalate to heavy** and append `pathway change: standard
+>   → heavy: <reason>`.
+> - **heavy:** full recipe + Phase 1.5 (bisect-symptom) + Phase 6
+>   triangulation (two `Explore` sub-agents on disjoint scopes
+>   compare first three observations). Diff cap 30 lines.
+>
+> **Downgrades** (e.g. heavy → standard) are forbidden — only the
+> orchestrator may relax a pathway. If you think the assigned
+> tier is too heavy, do the work anyway and surface it in the
+> learning entry instead. (Sandbagging into a cheaper lane masks
+> risk.)
+>
+> **Tool-budget caps per phase** (cumulative; if exceeded, append
+> `BUDGET BREACH: phase <N> over by <K>` and bail to Phase 8
+> with status BLOCKED — do not loop):
+>
+> - Phase 0: 1 grep
+> - Phase 1: 8 reads + 8 greps total
+> - Phase 1.5 (heavy only): 1 bisect run
+> - Phase 2: 1 test-file write + 3 `npm test` invocations
+> - Phase 4: 1 edit (fast) / 5 edits (standard) / 10 edits (heavy)
+> - Phase 5: 2 `npm test` invocations
+> - Phase 6: 1 `git diff` + (heavy only) 2 sub-agent spawns
+>
+> **Anti-patterns to avoid** (each is a known failure mode from
+> `docs/agent-debugging-playbook.md`):
+>
+> - **Anchoring:** committing to the first plausible cause without
+>   enumerating alternatives. Phase 1 enforces ≥3 hypotheses.
+> - **Hallucinated repro:** claiming a failure without running
+>   it. Every reproducer claim must include the command output.
+> - **Premature confidence:** "fixed" without the green test
+>   output. Phase 5 must show the suite output line.
+> - **Probe inflation:** running three commands when one would
+>   decide. Pick the cheapest probe per hypothesis, run it, move
+>   on.
+> - **Code-blindness via Read:** reading large files in chunks
+>   and missing content past the window. Use `grep` for existence
+>   checks, never a full read.
+>
 > Append your header to the run log first thing:
 >
->     ### {KEY} — {TITLE}
+>     ### {KEY} [{PATHWAY}] — {TITLE}
 >     - <iso>: started in worktree
 >
 > After every phase, append one line: `- <iso>: <phase>: <result>`.
@@ -193,7 +338,14 @@ without needing to coordinate with siblings.
 >
 > Append `read N lessons; <relevant or none>` to the run log.
 >
-> ### Phase 1 — triage
+> ### Phase 1 — triage (anchoring guard)
+>
+> Enumerate **at least three plausible hypotheses** before
+> probing. Rank them by the cheapest probe that would falsify
+> each. This is the anchoring guard — without ≥3 hypotheses on
+> paper you cannot proceed. (`fast` pathway may stop at one
+> hypothesis if the title/body explicitly names a string/style
+> change with `path:line` precision; otherwise still ≥3.)
 >
 > Common techniques (one usually fits — pick without reading the
 > full docs unless you need depth):
@@ -207,34 +359,59 @@ without needing to coordinate with siblings.
 >
 > Steps:
 >
-> 1. Pick a technique.
-> 2. Grep / read targeted files only. Note `path:line` evidence.
+> 1. Enumerate ≥3 hypotheses. Pick a technique to falsify each.
+> 2. Run the cheapest probe (grep > targeted read > full read).
+>    Eliminate or confirm. Re-rank. Repeat until one stands.
 > 3. Commit to one top hypothesis.
 >
-> Append: `hypothesis: <one-line>`.
+> If three hypotheses in a row fail to be confirmed by their
+> cheapest probe, **escalate** (standard → heavy) and re-enumerate
+> with a wider scope.
+>
+> Append: `hypotheses: N enumerated; top: <one-line>`.
 >
 > Read `docs/debugging-techniques.md` only if none of the above
 > fit your symptom shape.
 >
-> ### Phase 2 — reproducer
+> ### Phase 1.5 — bisect-symptom (heavy only)
 >
-> Reproducer contract (no need to read the playbook — this is the
-> whole rule): write a vitest case that fails on this branch,
-> would pass after fix, demonstrates the symptom only. If the
-> test does not actually fail, the bug is not unit-testable from
-> here — bail.
+> Run only on the `heavy` pathway. Use `git bisect run` against
+> the test command from Phase 2 (or the failing reproducer
+> command). Establish the first bad commit. Capture hash +
+> subject + files-changed.
+>
+> If the bisect range is unknown, skip and append
+> `bisect skipped: no known-good commit`. Otherwise append
+> `bisect: first bad <hash> — <subject>`.
+>
+> Always run `git bisect reset` before continuing to Phase 2.
+>
+> ### Phase 2 — reproducer (pathway-conditional)
+>
+> **fast:** Run a `grep` that proves the wrong text/style is in
+> the codebase right now. Capture exact `path:line` of every
+> match. Append `pre-fix grep: <pattern> → N matches at <paths>`.
+> No vitest case is written. Skip the rest of Phase 2 and
+> continue to Phase 4.
+>
+> **standard / heavy:** Reproducer contract — write a vitest case
+> that fails on this branch, would pass after fix, demonstrates
+> the symptom only. If the test does not actually fail, the bug
+> is not unit-testable from here — bail.
 >
 > 1. Write a vitest at `src/lib/__tests__/<key-slug>-repro.test.ts`
 >    that fails on the current branch and would pass after fix.
 >    Slug rule: lowercase the key, replace non-alphanumerics with
 >    `-` (so `KAN-3` → `kan-3`, `#5` → `gh-5`).
-> 3. Run it. Confirm it fails.
+> 2. Run it. Confirm it fails. Capture the failure output line
+>    in the run log — claiming a failing repro without the
+>    captured output is a hallucinated repro and is forbidden.
 >
 > If the test does not actually fail, append
 > `BLOCKED: reproducer does not fail`, jump to Phase 8 with
 > status BLOCKED and the reason, then return.
 >
-> Otherwise append `reproducer fails as expected`.
+> Otherwise append `reproducer fails as expected: <output line>`.
 >
 > ### Phase 3 — visible-bug repro (only if applicable)
 >
@@ -252,42 +429,72 @@ without needing to coordinate with siblings.
 > Append either `browser repro captured: <path>` or
 > `skipped browser repro: <reason>`.
 >
-> ### Phase 4 — fix
+> ### Phase 4 — fix (pathway-capped diff)
 >
 > Create the fix branch:
 >
 >     git checkout -b fix/<key-slug>
 >
-> Apply the minimum diff that makes the reproducer pass. Keep
-> under ten changed lines unless the hypothesis demands more. No
-> adjacent refactors. No new dependencies. No defensive guards
+> Apply the minimum diff that makes the reproducer pass / removes
+> the wrong text. Hard caps per pathway:
+>
+> - **fast:** ≤ 3 changed lines. If your fix needs more, escalate
+>   to standard before editing — do not exceed the cap silently.
+> - **standard:** ≤ 10 changed lines, ≤ 3 files touched.
+> - **heavy:** ≤ 30 changed lines, ≤ 5 files touched.
+>
+> If the diff would exceed your cap, append
+> `pathway change: <from> → <to>: cap exceeded` and either
+> escalate (fast → standard, standard → heavy) or, if you are
+> already on heavy, bail to Phase 8 with
+> `BLOCKED: heavy diff cap exceeded — needs human plan-gate`.
+>
+> No adjacent refactors. No new dependencies. No defensive guards
 > the bug did not require.
 >
 > Append: `fix applied: <one-line>`.
 >
-> ### Phase 5 — full suite
+> ### Phase 5 — verify (pathway-conditional)
 >
 > Run `npm test -- --reporter=dot` (compact output, only failures
-> verbose). If the previously-failing reproducer now passes AND
-> no other tests broke, continue.
+> verbose). If the previously-failing reproducer (or, on the
+> fast lane, the suite as a whole) now passes AND no other tests
+> broke, continue.
 >
-> If anything else broke, roll the fix back
+> **fast** additionally: re-run the grep from Phase 2. The match
+> count must drop to zero (or to the expected post-fix value).
+> Append `post-fix grep: <pattern> → 0 matches`. The grep-pair is
+> the fast lane's evidence contract — no zero-match grep, no PR.
+>
+> If anything broke, roll the fix back
 > (`git checkout HEAD~ -- <file>`), append
 > `BLOCKED: fix broke N other test(s)`, jump to Phase 8 with
 > status BLOCKED, and return.
 >
 > Otherwise append `tests green`.
 >
-> ### Phase 6 — adversarial self-review
+> ### Phase 6 — adversarial self-review (pathway-conditional)
 >
-> Read your own diff with `git diff main...HEAD`. Adopt a
-> fresh-context posture: "What is one concrete reason this fix
-> is wrong?". Look for missed edge cases, unintended side
-> effects, tests that pass for the wrong reason.
+> **fast:** Skipped. The grep-pair from Phase 5 is the only
+> evidence the fast lane requires. Append
+> `adversarial review: skipped (fast pathway)` and continue.
 >
-> If you find a **must-fix** issue, do NOT open the PR. Append
-> `BLOCKED: adversarial review: <one-line>`, jump to Phase 8
-> with status BLOCKED, and return.
+> **standard:** Read your own diff with `git diff main...HEAD`.
+> Adopt a fresh-context posture: "What is one concrete reason
+> this fix is wrong?". Look for missed edge cases, unintended
+> side effects, tests that pass for the wrong reason.
+>
+> **heavy:** Same as standard, plus **triangulation** — spawn two
+> `Explore` sub-agents on disjoint file scopes (one on the fix
+> file(s), one on adjacent modules) and ask each for its first
+> three observations on the diff. If they converge on the same
+> concern, treat as a must-fix. If they diverge wildly, the
+> hypothesis is underspecified — bail to Phase 8 with
+> `BLOCKED: triangulation divergent`.
+>
+> If you find a **must-fix** issue (any pathway), do NOT open the
+> PR. Append `BLOCKED: adversarial review: <one-line>`, jump to
+> Phase 8 with status BLOCKED, and return.
 >
 > If the issue is should-discuss or nit, note it but proceed.
 >
