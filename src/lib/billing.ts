@@ -163,7 +163,7 @@ export function calculateInvoice(input: InvoiceInput): Invoice {
 
   // ── Promo codes (additional discount stack) ─────────────────────────
   if (input.promoCode) {
-    const code = input.promoCode.trim();
+    const code = input.promoCode.trim().toUpperCase();
     if (code === "WELCOME10") bonus -= 10;
     else if (code === "WELCOME25") bonus -= 25;
     else if (code === "WELCOME50") {
