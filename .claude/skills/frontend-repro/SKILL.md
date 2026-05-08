@@ -1,14 +1,27 @@
 ---
 name: frontend-repro
-description: Drive Chrome via the chrome-devtools MCP to reproduce a visible frontend bug from a Jira ticket. Navigates the dev server, captures screenshots and console logs, and writes a short observation. Use when the user says "/frontend-repro <KEY>", "reproduce <KEY> in the browser", or "show me the visible bug for <KEY>".
+description: Drive Chrome via the chrome-devtools MCP to reproduce a visible frontend bug from an issue tracker ticket (Jira or GitHub). Navigates the dev server, captures screenshots and console logs, and writes a short observation. Use when the user says "/frontend-repro <KEY>", "reproduce <KEY> in the browser", or "show me the visible bug for <KEY>".
 ---
 
 # frontend-repro
 
 Browser-driven repro for visible bugs. Pairs with `ticket-triage`:
-when the analyser cannot find a unit-testable surface (e.g., the
-testimonials locale split or the cookie banner reload loop), this
+when the analyser cannot find a unit-testable surface (e.g., a
+locale-split rendering bug or a cookie-banner reload loop), this
 skill captures the symptom in screenshots and a short trace.
+
+## Project bindings
+
+| Binding              | Default                  | What it is                                  |
+|----------------------|--------------------------|---------------------------------------------|
+| `DEV_SERVER_URL`     | `http://localhost:3000`  | Where the running app responds              |
+| `DEV_SERVER_START`   | `npm run dev`            | Background command if the server is down    |
+| `DEV_SERVER_TIMEOUT` | `30s`                    | How long to wait for the port               |
+
+Override these once when adopting in a non-Node project (e.g.
+`http://localhost:5173` + `npm run dev` for Vite, or
+`http://localhost:8000` + `python manage.py runserver` for
+Django).
 
 ## Prerequisites
 
@@ -20,22 +33,20 @@ skill captures the symptom in screenshots and a short trace.
    Then restart Claude Code so the MCP tools load. The MCP server
    spawns a Chrome instance on demand, no OAuth.
 
-2. **Dev server running.** The skill assumes
-   `http://localhost:3000` serves the fakeenergy Next.js app. If
-   the homepage is not reachable, the skill runs:
+2. **Dev server running.** The skill assumes `{DEV_SERVER_URL}`
+   serves the running app. If the homepage is not reachable, the
+   skill runs `{DEV_SERVER_START}` from the repo root in the
+   background, waits up to `{DEV_SERVER_TIMEOUT}` for the port
+   to respond, then proceeds.
 
-       cd /Users/mmuschol/dev/brownfield/fakeenergy
-       npm run dev
-
-   in the background, waits for the port to respond, then proceeds.
-
-3. **Ticket is In Progress on the Jira board.** Same gate as
-   `ticket-triage`. Skill refuses To Do tickets.
+3. **Ticket is in progress on the issue tracker.** Same gate as
+   `ticket-triage`. For Jira: `status = "In Progress"`. For
+   GitHub: issue carries the `in-progress` label and is open.
 
 ## Inputs
 
-- **Argument (required):** a single Jira ticket key, e.g.,
-  `<projectKey>-9`.
+- **Argument (required):** a single ticket key. Jira shape
+  (`<projectKey>-9`), GitHub shape (`#9` or bare integer `9`).
 - **Optional flags in argument string:**
   - `--headed` to show the browser (useful for live demos)
   - `--full-page` to capture full-page screenshot instead of viewport
@@ -45,29 +56,34 @@ skill captures the symptom in screenshots and a short trace.
 
 ### 1. Resolve and gate
 
-Fetch the ticket via `mcp__atlassian__searchJiraIssuesUsingJql`
-with `jql = key = "<KEY>" AND status = "In Progress"`. If empty,
-look up actual status and refuse with the standard "drag the
-card" message.
+Detect source from argument shape (same rule as `ticket-triage`):
+
+- **Jira:** `mcp__atlassian__searchJiraIssuesUsingJql` with
+  `jql = key = "<KEY>" AND status = "In Progress"`.
+- **GitHub:** `gh issue view <N> --json
+  number,title,body,labels,state,url`, gate on `state = OPEN`
+  and `labels` containing `in-progress`.
+
+If empty / wrong state, refuse with current status surfaced.
 
 ### 2. Decide the route plan
 
 Read the ticket description. Decide which routes and actions to
-drive based on the ticket body. Common patterns in fakeenergy:
+drive based on the ticket body. Common patterns:
 
-- **Locale-split complaints** ("Preise sehen anders aus") →
-  navigate to `/`, capture the section with tariff cards and the
-  testimonials section side by side. Extract `textContent` of
-  `.price` and `.testimonial .who` via `evaluate_script`.
-- **Cookie-banner complaints** ("Banner kommt jedes Mal wieder")
-  → navigate to `/`, locate banner, click OK, capture localStorage
-  via `evaluate_script`, navigate to another route, observe whether
-  the banner reappears, screenshot.
-- **Funnel rejections** → navigate to `/funnel`, fill the form
-  with the customer's exact PLZ and source, click submit, capture
-  the resulting page or error.
-- **Layout / format complaints** → screenshot the named section,
-  then `evaluate_script` to dump computed styles or DOM text.
+- **Locale / format complaints** ("prices look different") →
+  navigate to the affected page, capture the two regions side by
+  side, extract `textContent` of the relevant selectors via
+  `evaluate_script`.
+- **Persistence complaints** ("banner keeps coming back") →
+  drive the user action that should persist, capture
+  `localStorage` / cookies via `evaluate_script`, navigate
+  away-and-back, observe whether the symptom recurs, screenshot.
+- **Form / funnel rejections** → navigate to the form, fill it
+  with the customer's exact inputs, click submit, capture the
+  resulting page or error.
+- **Layout complaints** → screenshot the named section, then
+  `evaluate_script` to dump computed styles or DOM text.
 
 If the ticket does not match a pattern, ask the user for the
 target route before driving the browser.
@@ -117,19 +133,20 @@ Reply to the user with:
 - Path to the artifact directory
 - One-line summary of what was reproduced
 - Console errors if any
-- Suggestion of which existing planted bug doc this maps to (only
-  if the answer key in `docs/planted-bugs.md` is present on the
-  branch — otherwise omit)
+- (Optional, workshop-fixture only) Suggestion of which existing
+  planted-bug doc this maps to, if `docs/planted-bugs.md` is
+  present on the branch — otherwise omit
 
 ## Failure modes
 
 - **chrome-devtools MCP not loaded.** Surface the install command
   above and stop. Do not try to call `mcp__chrome_devtools__*`
   tools that aren't registered.
-- **Dev server unreachable.** Try to start it once, wait up to 30
-  seconds for `:3000` to respond, then give up and ask the user.
-- **Ticket not In Progress.** Refuse, surface current status, ask
-  user to drag the card.
+- **Dev server unreachable.** Try `{DEV_SERVER_START}` once, wait
+  up to `{DEV_SERVER_TIMEOUT}` for `{DEV_SERVER_URL}` to respond,
+  then give up and ask the user.
+- **Ticket not in progress.** Refuse, surface current status /
+  labels, ask user to move the card or apply the label.
 - **Bug only appears on hard reload.** The chrome-devtools MCP
   has a hard-reload tool; use it. If the symptom only appears in
   incognito, mention it and run a second pass.
@@ -144,5 +161,5 @@ Reply to the user with:
 - Artifacts are committed by default — they are part of the demo
   postmortem. If the user prefers gitignored artifacts, they can
   add `docs/repro-screenshots/` to `.gitignore` before running.
-- Skill is read-and-record only. It does not file Jira comments,
-  does not edit source.
+- Skill is read-and-record only. It does not file ticket
+  comments, does not edit source.

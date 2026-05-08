@@ -5,11 +5,13 @@ description: Spawn a fresh sub-agent prompted to find one reason a proposed fix 
 
 # adversarial-review
 
-Variant of technique 7 from `docs/debugging-techniques.md`. The
-fixing agent is anchored on the hypothesis that produced the fix
-and tends to skip inconvenient edge cases. A fresh sub-agent
-prompted as "find one reason this is wrong" surfaces the cases
-the fixer rationalised away.
+Fresh-context attack on a proposed fix. The fixing agent is
+anchored on the hypothesis that produced the fix and tends to
+skip inconvenient edge cases. A fresh sub-agent prompted as
+"find one reason this is wrong" surfaces the cases the fixer
+rationalised away. (If the host project ships a debugging
+playbook at `docs/agent-debugging-playbook.md` or similar, this
+skill is a variant of its "fresh-context rubber duck" technique.)
 
 Pairs naturally with `fix-from-ticket` after the PR is open but
 before merging.
@@ -19,8 +21,8 @@ before merging.
 - **No required argument.** By default, reviews
   `git diff main...HEAD` plus any staged-but-not-committed
   changes.
-- **Optional argument:** a path or glob to scope the review (e.g.,
-  `src/lib/billing.ts`).
+- **Optional argument:** a path or glob to scope the review
+  (e.g., `src/lib/billing.ts`, `internal/auth/`, `pkg/handler/*.go`).
 
 ## Procedure
 
@@ -40,10 +42,14 @@ If a scope argument was given, narrow each diff to that path.
 
 ### 2. Identify the symptom claim
 
-Look at the most recent commit message on this branch. If it
-references a Jira key (e.g., `<projectKey>-3`), fetch the ticket via
-`mcp__atlassian__searchJiraIssuesUsingJql` for context. If no
-Jira key, use the commit message body as the claimed symptom.
+Look at the most recent commit message on this branch.
+
+- If it references a Jira key (`<projectKey>-3` shape), fetch
+  the ticket via `mcp__atlassian__searchJiraIssuesUsingJql` for
+  context.
+- If it references a GitHub issue (`Closes #N` or `#N`), fetch
+  via `gh issue view <N> --json title,body`.
+- Otherwise, use the commit message body as the claimed symptom.
 
 ### 3. Spawn the adversary
 
@@ -87,8 +93,8 @@ Prompt template (substitute `{DIFF}` and `{SYMPTOM}`):
 >
 > - **One concrete reason this is wrong**, or "Nothing concrete
 >   to flag."
-> - **Specific failing input** if applicable, e.g., a vitest case
->   that would expose the gap.
+> - **Specific failing input** if applicable — a test case in
+>   the project's framework that would expose the gap.
 > - **Severity:** "must-fix" / "should-discuss" / "nit".
 > - One-sentence suggested counter-fix or extra test.
 
