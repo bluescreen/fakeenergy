@@ -155,8 +155,8 @@ Quick room sweep:
 Then the memory beat. Have everyone run:
 
 ```bash
-ls ~/.denkvis/memory/01-projects/fakeenergy-debugging-demo/learnings/
-cat ~/.denkvis/memory/01-projects/fakeenergy-debugging-demo/learnings/*.md
+ls .claude/memory/learnings/
+cat .claude/memory/learnings/*.md
 ```
 
 Read your own learning file aloud as an example. Point at the

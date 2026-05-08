@@ -109,7 +109,7 @@ Now do these in the browser on YOUR fork (you forked the repo via
      interesting artifacts are local:
 
        git log --all --oneline                        # the fix branch and commit
-       ls ~/.denkvis/memory/01-projects/fakeenergy-debugging-demo/learnings/
+       ls .claude/memory/learnings/
 
   7. To view the fix as a real PR, open the printed compare URL
      in your browser (the worker leaves it in the run log) and

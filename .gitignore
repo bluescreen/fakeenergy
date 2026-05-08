@@ -52,3 +52,4 @@ Thumbs.db
 # END: makefile-managed
 docs/repro-screenshots/*
 /.claude/worktrees
+output/

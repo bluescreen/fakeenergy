@@ -5,13 +5,14 @@ calibration. Models a real-feeling Cologne energy provider's marketing
 website (electricity, gas, solar, heat) — branded "Slopwerk GmbH", German UI copy, plausible pricing tables and testimonials.
 
 It builds, runs, and looks polished. Underneath, every file is laced
-with the AI-slop patterns the practitioner-ranked memory flagged as
-Tier-S and Tier-A (`~/.denkvis/memory/03-resources/slop-rules-practitioner-ranked.md`).
+with the AI-slop patterns commonly flagged Tier-S and Tier-A by
+practitioners — exactly the material agentic debugging tools should learn
+to navigate.
 
 ## Run it
 
 ```bash
-cd /Users/mmuschol/dev/brownfield/fakeenergy
+cd fakeenergy
 npm install
 npm run dev          # http://localhost:3000
 # or

@@ -71,8 +71,8 @@ When the orchestrator returns:
 gh pr list
 
 # The learnings directory — durable cross-session memory
-ls ~/.denkvis/memory/01-projects/fakeenergy-debugging-demo/learnings/
-cat ~/.denkvis/memory/01-projects/fakeenergy-debugging-demo/learnings/*.md
+ls .claude/memory/learnings/
+cat .claude/memory/learnings/*.md
 ```
 
 Read the **Lesson** line on one of the learning files. That is

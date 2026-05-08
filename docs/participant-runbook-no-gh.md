@@ -89,8 +89,8 @@ When the orchestrator returns:
 git log --all --oneline | head -20
 
 # The learnings directory — durable cross-session memory
-ls ~/.denkvis/memory/01-projects/fakeenergy-debugging-demo/learnings/
-cat ~/.denkvis/memory/01-projects/fakeenergy-debugging-demo/learnings/*.md
+ls .claude/memory/learnings/
+cat .claude/memory/learnings/*.md
 ```
 
 Read the **Lesson** line on one learning file. That is what the
@@ -98,7 +98,7 @@ next worker will read before triaging.
 
 To open one of the agent's fixes as a real PR, copy the compare
 URL from the run log (or run
-`tail ~/.denkvis/memory/01-projects/fakeenergy-debugging-demo/runs/auto-fix-*.md`)
+`tail .claude/memory/runs/auto-fix-*.md`)
 and click "Create pull request" in the browser.
 
 If you finished early, label two more issues `in-progress` and
