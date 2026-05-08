@@ -26,7 +26,7 @@ bash ./demo-setup.sh
 ```
 
 Installs deps, verifies the suite is green, creates the
-`in-progress` label, mirrors the nine demo issues onto your fork,
+`in-progress` label, mirrors the thirteen demo issues onto your fork,
 registers the `chrome-devtools` MCP if missing. ~2 min.
 
 If the script asks you to restart Claude Code, do that now.
@@ -95,6 +95,6 @@ read your learnings.
 - **Agent hangs > 5 minutes** → cancel it. The orchestrator's
   built-in cap will mark it as `ERROR: timeout`.
 - **Tests fail before any agent work** → reset:
-  `git reset --hard origin/demo/hard-bugs && npm install`.
+  `git reset --hard origin/main && npm install`.
 
 That's it.

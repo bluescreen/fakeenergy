@@ -137,7 +137,6 @@ assumes the gate is still valid. It is not.
 
 ## How these map to the planted bugs
 
-The bugs in `demo/hard-bugs` are picked so each one rewards a
-different technique. The mapping is in `docs/planted-bugs.md` (kept
-on the demo branch only — move it before the demo if you do not want
-the agent to read it).
+The bugs on `main` are picked so each one rewards a different
+technique. The mapping is in `docs/planted-bugs.md` — move or delete
+that file before the demo if you do not want the agent to read it.

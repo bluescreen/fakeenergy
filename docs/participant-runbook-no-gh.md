@@ -110,7 +110,7 @@ reads your learnings before triaging.
 ## If something goes wrong
 
 - **Setup script fails on `npx vitest`** → reset:
-  `git reset --hard origin/demo/hard-bugs && npm install` and
+  `git reset --hard origin/main && npm install` and
   re-run.
 - **`chrome-devtools` MCP not connected after restart** → run
   `claude mcp list`. If absent:

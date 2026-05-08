@@ -18,7 +18,7 @@ One-time setup on your end:
 # Mark fakeenergy as a GitHub template so "Use this template" works
 gh repo edit bluescreen/fakeenergy --template
 
-# Verify the participant runbook and setup script are on demo/hard-bugs
+# Verify the participant runbook and setup script are on main
 ls docs/participant-runbook.md demo-setup.sh
 ```
 
@@ -40,7 +40,7 @@ during arrival.
 ## Opening (5 min)
 
 *"This is a Next.js app for a fictional Cologne energy company.
-Nine production-shaped customer complaints in the issue tracker,
+Thirteen production-shaped customer complaints in the issue tracker,
 in German, in customer voice. Most blame the wrong thing. The
 actual bugs are in code."*
 
@@ -53,14 +53,14 @@ back to the issue, and write a learning to memory."*
 Direct them to the participant runbook. Five steps:
 
 ```
-https://github.com/bluescreen/fakeenergy/blob/demo/hard-bugs/docs/participant-runbook.md
+https://github.com/bluescreen/fakeenergy/blob/main/docs/participant-runbook.md
 ```
 
 For anyone without the `gh` CLI, point at the no-gh variant
 instead — same recipe, GitHub bits via web UI:
 
 ```
-https://github.com/bluescreen/fakeenergy/blob/demo/hard-bugs/docs/participant-runbook-no-gh.md
+https://github.com/bluescreen/fakeenergy/blob/main/docs/participant-runbook-no-gh.md
 ```
 
 ## What to say while their agents work (19 min)
