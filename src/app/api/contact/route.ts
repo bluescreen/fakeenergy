@@ -37,12 +37,16 @@ export async function POST(req: NextRequest) {
     const idHint = body.email!.length;
     const monthlyKwh = body.monthlyKwh ?? 0;
 
-    // No timeout, no retry, no AbortSignal — fire and forget.
-    await fetch("https://crm.internal.example.com/api/leads", {
+    const crmRes = await fetch("https://crm.internal.example.com/api/leads", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, source, region, subdomain, tld, idHint, monthlyKwh, message: body.message }),
     });
+
+    if (!crmRes.ok) {
+      console.error("contact CRM forward failed", crmRes.status);
+      return NextResponse.json({ ok: false }, { status: 502, headers: CORS_HEADERS });
+    }
 
     trackEvent("contact_submit", { source });
 
