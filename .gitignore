@@ -6,6 +6,9 @@ next-env.d.ts
 .env*.local
 .DS_Store
 
+# auto-fix-loop skill: repo-local run logs and learnings
+.auto-fix-loop/
+
 
 # BEGIN: makefile-managed (make init-gitignore)
 # secrets — never commit

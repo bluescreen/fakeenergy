@@ -1,6 +1,6 @@
 ---
 name: ticket-triage
-description: Fetch in-progress tickets from Jira (Atlassian MCP) or GitHub Issues (gh CLI) and run two sub-agents on each in parallel — an analyser that produces a ranked hypothesis tree, and a reproducer that writes a failing vitest case. Auto-detects source from argument shape or origin remote. Use when the user says "/ticket-triage", "triage in-progress tickets", "analyse current jira work", "triage open github issues", or asks to bring fresh agents onto active tickets.
+description: Fetch in-progress tickets from Jira (Atlassian MCP) or GitHub Issues (gh CLI) and run two sub-agents on each in parallel — an analyser that produces a ranked hypothesis tree, and a reproducer that writes a failing test case. Auto-detects source from argument shape or origin remote. Use when the user says "/ticket-triage", "triage in-progress tickets", "analyse current jira work", "triage open github issues", or asks to bring fresh agents onto active tickets.
 ---
 
 # ticket-triage
@@ -11,10 +11,17 @@ each ticket the skill spawns:
 - **analyser** (read-only `Explore` sub-agent) — ranked hypothesis
   tree with `path:line` evidence and the cheapest next probe
 - **reproducer** (`general-purpose` sub-agent) — minimal failing
-  vitest case under `src/lib/__tests__/`, no source edits
+  test case under `{TEST_DIR}` using `{TEST_FRAMEWORK}`, no
+  source edits
 
 Both run in parallel per ticket. The main agent aggregates and
 presents one block per ticket.
+
+## Project bindings
+
+Inherits the same bindings as `auto-fix-loop`. Defaults: `npm
+test -- --reporter=dot` / `src/lib/__tests__` / `test.ts` /
+`vitest`. Override once when adopting in a non-Node project.
 
 The skill works against either:
 
@@ -223,10 +230,10 @@ Send this as the `prompt` for the `Explore` agent. Substitute
 `{KEY}`, `{TITLE}`, `{BODY}`, and `{SOURCE}` literally.
 
 > You are the analyser sub-agent for {SOURCE} ticket **{KEY}** on
-> the fakeenergy Next.js project (working directory:
-> `/Users/mmuschol/dev/brownfield/fakeenergy`). The ticket is a
-> customer-voice complaint in German and is often misleading on
-> purpose. Your task is to read past the noise to the likely cause.
+> the project at `{REPO_ROOT}`. The ticket is a customer-voice
+> complaint, possibly in a non-English language, and may be
+> misleading or noisy. Your task is to read past the noise to
+> the likely cause.
 >
 > **Ticket title:** {TITLE}
 >
@@ -235,8 +242,9 @@ Send this as the `prompt` for the `Explore` agent. Substitute
 >
 > Steps:
 >
-> 1. Read `docs/debugging-techniques.md`. Pick the technique most
->    likely to apply.
+> 1. If `{PLAYBOOK_PATH}` exists in this repo, read it and pick
+>    the technique most likely to apply. Otherwise rely on
+>    standard hypothesis-tree reasoning.
 > 2. Locate the candidate code paths. Cite as `path:line`.
 > 3. List 3–5 plausible root causes, ranked by the cost of the
 >    cheapest probe that would falsify each one.
@@ -248,15 +256,14 @@ Send this as the `prompt` for the `Explore` agent. Substitute
 > - **Backup hypotheses:** two bullets, each one sentence + `path:line`
 > - **Cheapest next probe:** one shell command or grep that would
 >   falsify the top hypothesis in under 10 seconds
-> - **Technique used:** name from `docs/debugging-techniques.md`
+> - **Technique used:** name (reference the playbook if present)
 
 ## Sub-agent prompt — reproducer
 
 Send this as the `prompt` for the `general-purpose` agent.
 
 > You are the reproducer sub-agent for {SOURCE} ticket **{KEY}**
-> on the fakeenergy Next.js project (working directory:
-> `/Users/mmuschol/dev/brownfield/fakeenergy`).
+> on the project at `{REPO_ROOT}`.
 >
 > **Ticket title:** {TITLE}
 >
@@ -265,20 +272,22 @@ Send this as the `prompt` for the `general-purpose` agent.
 >
 > Steps:
 >
-> 1. Read `docs/agent-debugging-playbook.md` Phase 4 (Reproducible
->    test before fix). Follow the convention there.
-> 2. Write a minimal vitest case under `src/lib/__tests__/` named
->    `{key-slug}-repro.test.ts` that fails on the current branch
->    and would pass once the bug is fixed. Use the lowercased key
->    with non-alphanumerics replaced by `-` (e.g., `KAN-3` becomes
->    `kan-3`, `#5` becomes `gh-5`).
-> 3. Run `npx vitest run --reporter=verbose
->    src/lib/__tests__/{key-slug}-repro.test.ts` and capture the
->    failure output.
+> 1. If `{PLAYBOOK_PATH}` exists, read its "reproducible test
+>    before fix" section and follow that convention. Otherwise:
+>    write the smallest test that fails today, would pass after
+>    fix, and demonstrates only the reported symptom.
+> 2. Write a minimal `{TEST_FRAMEWORK}` case under `{TEST_DIR}`
+>    named `{key-slug}-repro.{TEST_EXT}` that fails on the
+>    current branch and would pass once the bug is fixed. Use
+>    the lowercased key with non-alphanumerics replaced by `-`
+>    (e.g., `KAN-3` becomes `kan-3`, `#5` becomes `gh-5`).
+> 3. Run `{TEST_CMD}` (scoped to the new file if your runner
+>    supports it) and capture the failure output.
 > 4. Do NOT change any source file. Do NOT touch the bug itself.
 >    The test must demonstrate the symptom only.
 > 5. If the bug is purely visual (no unit-testable surface), say
->    so and propose a Playwright sketch or a manual repro instead.
+>    so and propose a browser-driver sketch (Playwright /
+>    Puppeteer / chrome-devtools MCP) or a manual repro instead.
 >    Do not invent a unit test that does not actually fail.
 >
 > Respond in under 200 words, in this shape:
@@ -313,7 +322,7 @@ Send this as the `prompt` for the `general-purpose` agent.
   on GitHub AND the `atlassian` MCP is connected, default to
   GitHub but mention the Jira fallback in the confirm prompt so
   the user can correct.
-- **Ticket lacks German body.** Some tickets are placeholders. If
+- **Ticket body too thin.** Some tickets are placeholders. If
   the description is empty or under 100 chars, skip the
   reproducer (it has nothing to work with) and run only the
   analyser.
@@ -324,9 +333,10 @@ Send this as the `prompt` for the `general-purpose` agent.
 
 - The skill is read-and-propose only. No comments posted, no
   labels removed, no fixes pushed.
-- Project-local skill, scoped to fakeenergy. Adjust the test path
-  in the reproducer prompt if you copy this skill into another
-  project.
+- Adopters override the test-runner bindings (`TEST_CMD`,
+  `TEST_DIR`, `TEST_EXT`, `TEST_FRAMEWORK`) once when copying
+  this skill into a new project. The reproducer prompt resolves
+  through them; no further edits required.
 - Renaming consideration: the file path is still
   `.claude/skills/ticket-triage/SKILL.md` even though it now
   handles GitHub too. Rename the directory to `issue-triage` if

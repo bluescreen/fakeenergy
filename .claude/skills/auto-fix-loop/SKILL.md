@@ -1,11 +1,11 @@
 ---
 name: auto-fix-loop
-description: Spawn one autonomous bug-fix agent per open ticket, each on its own git worktree, in parallel. Three tiered pathways (fast / standard / heavy) sized to the bug. Each agent triages, reproduces, fixes, adversarial-reviews when the pathway demands it, and opens a draft PR. Logs progress to ~/.denkvis/memory/. Use when the user says "/auto-fix-loop", "fix all the in-progress tickets autonomously", "send the fleet", "do the whole loop", or "ship the in-progress tickets".
+description: Spawn one autonomous bug-fix agent per open ticket, each on its own git worktree, in parallel. Three tiered pathways (fast / standard / heavy) sized to the bug. Each agent triages, reproduces, fixes, adversarial-reviews when the pathway demands it, and opens a draft PR. Logs progress to a repo-local memory dir. Use when the user says "/auto-fix-loop", "fix all the in-progress tickets autonomously", "send the fleet", "do the whole loop", or "ship the in-progress tickets".
 ---
 
 # auto-fix-loop
 
-**Version: v1.2** (tiered pathways: fast / standard / heavy)
+**Version: v1.3** (project-agnostic; bindings + repo-local memory)
 
 End-to-end autonomous bug-fix orchestration. One general-purpose
 sub-agent per ticket. Each runs in its own git worktree, follows
@@ -24,10 +24,36 @@ Each worker also posts one final comment back to the source ticket
 so the issue tracker is the source of truth for human reviewers —
 no need to dig through git, the run log, or chat history.
 
+## Project bindings
+
+The skill assumes a small set of bindings about the host project.
+**Edit this block once when adopting the skill in a new repo.** All
+references below resolve through it.
+
+| Binding              | Default                                         | What it is                                                  |
+|----------------------|-------------------------------------------------|-------------------------------------------------------------|
+| `MEMORY_DIR`         | `.auto-fix-loop` (repo-local; gitignored)       | Where run logs and learnings live; override via env `AUTO_FIX_MEMORY_DIR` for a central vault |
+| `RUNS_DIR`           | `${MEMORY_DIR}/runs`                            | Run-log directory                                           |
+| `LEARNINGS_DIR`      | `${MEMORY_DIR}/learnings`                       | Per-worker learning entries                                 |
+| `REPO_SLUG`          | `git rev-parse --show-toplevel \| xargs basename` | Used in branch names and PR titles                        |
+| `ORIGIN_REMOTE`      | `gh repo view --json nameWithOwner -q .nameWithOwner` | Used to address PR / issue API calls                  |
+| `TEST_CMD`           | `npm test -- --reporter=dot`                    | Single command that runs the full test suite                |
+| `TEST_DIR`           | `src/lib/__tests__`                             | Where the worker writes a regression test                   |
+| `TEST_EXT`           | `test.ts`                                       | Filename suffix for the regression test                     |
+| `TEST_FRAMEWORK`     | `vitest`                                        | The runner the worker invokes; only matters for syntax in the regression file |
+| `DEV_SERVER_URL`     | `http://localhost:3000`                         | Used by Phase 3 visible-bug repro (chrome-devtools MCP)     |
+| `DEV_SERVER_START`   | `npm run dev`                                   | Background command if the dev server is not already running |
+| `PLAYBOOK_PATH`      | `docs/agent-debugging-playbook.md`              | Optional. Worker reads it only when its symptom shape is unfamiliar; falls back to internal heuristics if missing |
+
+**Adapting for non-Node projects:** override `TEST_CMD` (e.g.
+`pytest -q`, `go test ./...`, `cargo test`), `TEST_DIR`,
+`TEST_EXT`, and `TEST_FRAMEWORK`. Override `DEV_SERVER_*` only if
+Phase 3 (browser repro) is in scope.
+
 **Learnings memory.** Each worker reads prior learnings before
 triage and writes one durable entry after Phase 8. Path:
 
-    ~/.denkvis/memory/01-projects/fakeenergy-debugging-demo/learnings/<key-slug>-<iso>.md
+    ${LEARNINGS_DIR}/<key-slug>-<iso>.md
 
 One file per worker run, never edited after write. Future workers
 glob the directory at the start of triage so the second run knows
@@ -106,7 +132,7 @@ proves it is gone. No grep-evidence pair, no PR.
 Before any other output, print exactly one line so the user can
 see which build of the skill is running:
 
-    auto-fix-loop v1.2 — tiered pathways (fast / standard / heavy)
+    auto-fix-loop v1.3 — bindings + repo-local memory
 
 Bump the version when you change the procedure or worker
 contract; keep the banner one line.
@@ -166,8 +192,8 @@ The cost gate exists because N parallel agents is expensive.
 Compute run ID: `auto-fix-<UTC-isoZ-no-colons>`, e.g.
 `auto-fix-2026-05-07T203015Z`.
 
-Run-log path:
-`~/.denkvis/memory/01-projects/fakeenergy-debugging-demo/runs/<run-id>.md`
+Run-log path: `${RUNS_DIR}/<run-id>.md` (default
+`.auto-fix-loop/runs/<run-id>.md`).
 
 Create directories with `mkdir -p`. Write the run header:
 
@@ -200,15 +226,20 @@ For each ticket, in the **same response**, call `Agent` with:
 - `isolation`: `"worktree"` — each worker gets its own checkout
 - `description`: `"auto-fix <KEY> [<pathway>]"`
 - `model`: pick by pathway —
-  - `fast` → `haiku` (the recipe is mostly grep + edit + npm test;
+  - `fast` → `haiku` (the recipe is mostly grep + edit + suite run;
     cheap reasoning is enough)
   - `standard` → `sonnet` (default; balanced cost vs. depth)
   - `heavy` → `sonnet` (or `opus` if the queue is small and the
     bugs are gnarly; opus only when the user explicitly opts in,
     because cost ramps fast)
-- `prompt`: the worker template below, with `{KEY}`, `{TITLE}`,
-  `{BODY}`, `{SOURCE}`, `{BROWSE_URL}`, `{RUN_LOG_PATH}`,
-  `{PATHWAY}` substituted literally.
+- `prompt`: the worker template below, with the per-ticket
+  values (`{KEY}`, `{TITLE}`, `{BODY}`, `{SOURCE}`,
+  `{BROWSE_URL}`, `{RUN_LOG_PATH}`, `{PATHWAY}`) **and** the
+  resolved Project bindings (`{REPO_ROOT}`, `{REPO_SLUG}`,
+  `{MEMORY_DIR}`, `{RUNS_DIR}`, `{LEARNINGS_DIR}`, `{TEST_CMD}`,
+  `{TEST_DIR}`, `{TEST_EXT}`, `{TEST_FRAMEWORK}`,
+  `{DEV_SERVER_URL}`, `{DEV_SERVER_START}`, `{PLAYBOOK_PATH}`)
+  substituted literally.
 
 Cap at `--max` parallel. If more tickets than the cap, batch in
 waves. Wait for each wave before the next.
@@ -245,11 +276,23 @@ inside its own worktree. It commits, pushes, and opens a draft PR
 without needing to coordinate with siblings.
 
 > You are an autonomous bug-fix agent for {SOURCE} ticket
-> **{KEY}** on the fakeenergy Next.js project. You run inside
-> your own git worktree — commit and push freely, you will not
-> step on sibling agents. Your job: triage, reproduce (per the
-> pathway), fix, self-review (per the pathway), open a draft PR,
-> record what happened.
+> **{KEY}** on the project at `{REPO_ROOT}` (slug `{REPO_SLUG}`).
+> You run inside your own git worktree — commit and push freely,
+> you will not step on sibling agents. Your job: triage,
+> reproduce (per the pathway), fix, self-review (per the
+> pathway), open a draft PR, record what happened.
+>
+> **Project bindings** (resolved by the orchestrator from the
+> skill's bindings table; treat as authoritative):
+>
+> - `MEMORY_DIR={MEMORY_DIR}`, `RUNS_DIR={RUNS_DIR}`,
+>   `LEARNINGS_DIR={LEARNINGS_DIR}`
+> - `TEST_CMD={TEST_CMD}`, `TEST_DIR={TEST_DIR}`,
+>   `TEST_EXT={TEST_EXT}`, `TEST_FRAMEWORK={TEST_FRAMEWORK}`
+> - `DEV_SERVER_URL={DEV_SERVER_URL}`,
+>   `DEV_SERVER_START={DEV_SERVER_START}`
+> - `PLAYBOOK_PATH={PLAYBOOK_PATH}` (may not exist; check
+>   before reading)
 >
 > **Ticket title:** {TITLE}
 >
@@ -293,9 +336,9 @@ without needing to coordinate with siblings.
 > - Phase 0: 1 grep
 > - Phase 1: 8 reads + 8 greps total
 > - Phase 1.5 (heavy only): 1 bisect run
-> - Phase 2: 1 test-file write + 3 `npm test` invocations
+> - Phase 2: 1 test-file write + 3 `{TEST_CMD}` invocations
 > - Phase 4: 1 edit (fast) / 5 edits (standard) / 10 edits (heavy)
-> - Phase 5: 2 `npm test` invocations
+> - Phase 5: 2 `{TEST_CMD}` invocations
 > - Phase 6: 1 `git diff` + (heavy only) 2 sub-agent spawns
 >
 > **Anti-patterns to avoid** (each is a known failure mode from
@@ -323,11 +366,11 @@ without needing to coordinate with siblings.
 >
 > ### Phase 0 — read prior learnings
 >
-> Glob `~/.denkvis/memory/01-projects/fakeenergy-debugging-demo/learnings/`.
-> If empty, append `no priors` and skip to Phase 1. Otherwise read
-> only the **Lesson** lines (one grep, not a full file read each):
+> Glob `{LEARNINGS_DIR}`. If the directory is missing or empty,
+> append `no priors` and skip to Phase 1. Otherwise read only the
+> **Lesson** lines (one grep, not a full file read each):
 >
->     grep -h "^- \*\*Lesson" ~/.denkvis/memory/01-projects/fakeenergy-debugging-demo/learnings/*.md
+>     grep -h "^- \*\*Lesson" {LEARNINGS_DIR}/*.md
 >
 > Use as priors:
 >
@@ -370,7 +413,7 @@ without needing to coordinate with siblings.
 >
 > Append: `hypotheses: N enumerated; top: <one-line>`.
 >
-> Read `docs/debugging-techniques.md` only if none of the above
+> Read `{PLAYBOOK_PATH}` only if it exists AND none of the above
 > fit your symptom shape.
 >
 > ### Phase 1.5 — bisect-symptom (heavy only)
@@ -394,18 +437,19 @@ without needing to coordinate with siblings.
 > No vitest case is written. Skip the rest of Phase 2 and
 > continue to Phase 4.
 >
-> **standard / heavy:** Reproducer contract — write a vitest case
-> that fails on this branch, would pass after fix, demonstrates
-> the symptom only. If the test does not actually fail, the bug
-> is not unit-testable from here — bail.
+> **standard / heavy:** Reproducer contract — write a
+> `{TEST_FRAMEWORK}` case that fails on this branch, would pass
+> after fix, demonstrates the symptom only. If the test does not
+> actually fail, the bug is not unit-testable from here — bail.
 >
-> 1. Write a vitest at `src/lib/__tests__/<key-slug>-repro.test.ts`
+> 1. Write a test at `{TEST_DIR}/<key-slug>-repro.{TEST_EXT}`
 >    that fails on the current branch and would pass after fix.
 >    Slug rule: lowercase the key, replace non-alphanumerics with
 >    `-` (so `KAN-3` → `kan-3`, `#5` → `gh-5`).
-> 2. Run it. Confirm it fails. Capture the failure output line
->    in the run log — claiming a failing repro without the
->    captured output is a hallucinated repro and is forbidden.
+> 2. Run it via `{TEST_CMD}`. Confirm it fails. Capture the
+>    failure output line in the run log — claiming a failing
+>    repro without the captured output is a hallucinated repro
+>    and is forbidden.
 >
 > If the test does not actually fail, append
 > `BLOCKED: reproducer does not fail`, jump to Phase 8 with
@@ -421,10 +465,10 @@ without needing to coordinate with siblings.
 >
 > Try the chrome-devtools MCP if loaded
 > (`mcp__chrome_devtools__*` tools). Drive the dev server at
-> `http://localhost:3000`, capture screenshots to
+> `{DEV_SERVER_URL}`, capture screenshots to
 > `docs/repro-screenshots/<key-slug>/`. If the dev server is
-> not running, attempt `npm run dev` in the background; if that
-> fails, skip browser repro and note it.
+> not running, attempt `{DEV_SERVER_START}` in the background;
+> if that fails, skip browser repro and note it.
 >
 > Append either `browser repro captured: <path>` or
 > `skipped browser repro: <reason>`.
@@ -456,10 +500,9 @@ without needing to coordinate with siblings.
 >
 > ### Phase 5 — verify (pathway-conditional)
 >
-> Run `npm test -- --reporter=dot` (compact output, only failures
-> verbose). If the previously-failing reproducer (or, on the
-> fast lane, the suite as a whole) now passes AND no other tests
-> broke, continue.
+> Run `{TEST_CMD}`. If the previously-failing reproducer (or, on
+> the fast lane, the suite as a whole) now passes AND no other
+> tests broke, continue.
 >
 > **fast** additionally: re-run the grep from Phase 2. The match
 > count must drop to zero (or to the expected post-fix value).
@@ -508,7 +551,8 @@ without needing to coordinate with siblings.
 >
 >     Closes {KEY}.
 >
->     Repro: src/lib/__tests__/<key-slug>-repro.test.ts
+>     Pathway: {PATHWAY}
+>     Repro: {TEST_DIR}/<key-slug>-repro.{TEST_EXT} (or "grep evidence" for fast)
 >     Cause: <one sentence>
 >     Fix: <one sentence>"
 >
@@ -536,7 +580,7 @@ without needing to coordinate with siblings.
 >     **Auto-fix worker — PR open**
 >
 >     Hypothesis: <Phase 1 one-liner>
->     Reproducer: src/lib/__tests__/<key-slug>-repro.test.ts
+>     Reproducer: {TEST_DIR}/<key-slug>-repro.{TEST_EXT} (or "grep evidence" for fast)
 >     Cause: <one sentence>
 >     Fix: <one sentence>
 >     Adversarial review: <verdict from Phase 6>
@@ -578,7 +622,7 @@ without needing to coordinate with siblings.
 >
 > Write a single new file to:
 >
->     ~/.denkvis/memory/01-projects/fakeenergy-debugging-demo/learnings/<key-slug>-<iso-utc-no-colons>.md
+>     {LEARNINGS_DIR}/<key-slug>-<iso-utc-no-colons>.md
 >
 > Create the directory with `mkdir -p` if missing. Use this exact
 > shape:
@@ -595,7 +639,7 @@ without needing to coordinate with siblings.
 >     - **Source:** {SOURCE}
 >     - **Symptom (one line, customer-voice excerpt):** ...
 >     - **Hypothesis pursued:** ...
->     - **Technique used (from docs/debugging-techniques.md):** ...
+>     - **Technique used:** ...   _(reference `{PLAYBOOK_PATH}` if it exists in the project)_
 >     - **Outcome:** ...
 >     - **Lesson for future workers:** one sentence — what to
 >       remember next time a symptom of this shape arrives.
@@ -638,7 +682,7 @@ without needing to coordinate with siblings.
   execution on the main worktree, one ticket at a time. Warn the
   user.
 - **All workers block on the same cause** (e.g., the test
-  framework itself broken, or `npm test` not runnable). Stop
+  framework itself broken, or `{TEST_CMD}` not runnable). Stop
   after the first three blocks and ask the user instead of
   burning budget on the rest.
 - **Memory write fails.** Surface a warning but do not block
@@ -663,12 +707,11 @@ without needing to coordinate with siblings.
   on its own branch; the worktree path and branch are returned
   in the agent result. Worktrees with no changes are
   auto-cleaned, ones with commits persist for inspection.
-- Memory writes follow PARA. Run logs land under
-  `01-projects/fakeenergy-debugging-demo/runs/`. They are not
-  indexed (subdirectory of a project, not the project file
-  itself). Reference them from
-  `01-projects/fakeenergy-debugging-demo.md` if you want a
-  cross-session breadcrumb.
+- Memory writes default to repo-local: run logs land under
+  `${RUNS_DIR}` (default `.auto-fix-loop/runs/`), learnings under
+  `${LEARNINGS_DIR}`. Override either via the `MEMORY_DIR`
+  binding or the `AUTO_FIX_MEMORY_DIR` env var if you want a
+  central vault across repos.
 - This skill is the orchestration layer. The five sub-skills
   (`ticket-triage`, `fix-from-ticket`, `frontend-repro`,
   `adversarial-review`, `bisect-symptom`) remain individually
