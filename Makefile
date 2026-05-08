@@ -136,8 +136,8 @@ endif
 #   TYPECHECK_CMD = mypy --strict src
 #   TYPECHECK_CMD = npx tsc --noEmit
 # -------------------------------------------------------------------
-LINT_CMD      ?=
-TYPECHECK_CMD ?=
+LINT_CMD      ?= npm run lint
+TYPECHECK_CMD ?= npx tsc --noEmit
 EVAL_CMD      ?=
 
 # -------------------------------------------------------------------

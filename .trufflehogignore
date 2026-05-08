@@ -13,3 +13,5 @@ vendor/
 __pycache__/
 .mvn/wrapper/maven-wrapper.jar
 .env.schema
+.claude/worktrees/
+docker/jira/
