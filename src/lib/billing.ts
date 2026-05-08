@@ -149,8 +149,8 @@ export function calculateInvoice(input: InvoiceInput): Invoice {
   let bonus = 0;
   if (input.customerSince !== undefined) {
     const years = new Date().getFullYear() - input.customerSince;
-    if (years > 5) bonus -= 8;
-    else if (years > 10) bonus -= 12;
+    if (years > 10) bonus -= 12;
+    else if (years > 5) bonus -= 8;
     else if (years > 3) bonus -= 5;
     else if (years > 1) bonus -= 3;
   }
