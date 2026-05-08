@@ -6,9 +6,8 @@ description: Drive Chrome via the chrome-devtools MCP to reproduce a visible fro
 # frontend-repro
 
 Browser-driven repro for visible bugs. Pairs with `ticket-triage`:
-when the analyser cannot find a unit-testable surface (e.g., a
-locale-split rendering bug or a cookie-banner reload loop), this
-skill captures the symptom in screenshots and a short trace.
+when the analyser cannot find a unit-testable surface, this skill
+captures the symptom in screenshots and a short trace.
 
 ## Project bindings
 
@@ -133,9 +132,6 @@ Reply to the user with:
 - Path to the artifact directory
 - One-line summary of what was reproduced
 - Console errors if any
-- (Optional, workshop-fixture only) Suggestion of which existing
-  planted-bug doc this maps to, if `docs/planted-bugs.md` is
-  present on the branch — otherwise omit
 
 ## Failure modes
 

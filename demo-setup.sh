@@ -27,10 +27,9 @@ if ! npm test --silent --help >/dev/null 2>&1 && [ ! -x node_modules/.bin/vitest
 fi
 echo "    vitest present"
 
-# Note: we don't run 'npm test' as a green-suite check here. The
-# demo branch carries planted bugs (e.g., B6 audit drop) that
-# trigger an unhandled rejection in the bot-UA test, which makes
-# vitest exit non-zero even though all 46 tests pass content-wise.
+# Note: we don't run 'npm test' as a green-suite check here. One of
+# the planted defects emits an unhandled rejection that makes vitest
+# exit non-zero even though every test case passes content-wise.
 # Workers verify their own reproducer before any fix, that is the
 # real green-suite gate.
 

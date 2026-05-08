@@ -138,5 +138,5 @@ assumes the gate is still valid. It is not.
 ## How these map to the planted bugs
 
 The bugs on `main` are picked so each one rewards a different
-technique. The mapping is in `docs/planted-bugs.md` — move or delete
-that file before the demo if you do not want the agent to read it.
+technique. The mapping is held privately by the presenter for
+post-workshop review.
