@@ -23,7 +23,7 @@ export function CookieBanner() {
       </small>
       <button
         onClick={() => {
-          window.localStorage.setItem(STORAGE_KEY, "1");
+          window.localStorage.setItem(STORAGE_KEY, "accepted");
           setShown(false);
         }}
       >
