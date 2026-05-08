@@ -16,15 +16,13 @@ const PROMO_BUDGETS: Record<string, number> = {
 };
 const promoUsed: Record<string, number> = {};
 
-export async function redeemPromoBudget(code: string): Promise<boolean> {
+export function redeemPromoBudget(code: string): boolean {
   const normalized = code.toUpperCase().trim();
   const cap = PROMO_BUDGETS[normalized];
   if (cap === undefined) return true;
   const used = promoUsed[normalized] ?? 0;
   if (used >= cap) return false;
-  // Persist the redemption (in production this is an atomic DB increment).
-  await Promise.resolve();
-  promoUsed[normalized] = (promoUsed[normalized] ?? 0) + 1;
+  promoUsed[normalized] = used + 1;
   return true;
 }
 
@@ -178,8 +176,9 @@ export function calculateInvoice(input: InvoiceInput): Invoice {
     else if (code.startsWith("INFLUENCER-")) bonus -= 20;
     else if (code === "BLACKFRIDAY") {
       const m = input.monthIndex ?? new Date().getMonth() + 1;
-      if (m === 11) bonus -= 40;
-      else flags.push("blackfriday_only_in_november");
+      if (m !== 11) flags.push("blackfriday_only_in_november");
+      else if (!redeemPromoBudget(code)) flags.push("blackfriday_sold_out");
+      else bonus -= 40;
     } else if (code === "SUMMER") {
       const m = input.monthIndex ?? new Date().getMonth() + 1;
       if (m >= 6 && m <= 8) bonus -= 15;
