@@ -221,7 +221,7 @@ export function calculateInvoice(input: InvoiceInput): Invoice {
     lineItems.push({ label: `MwSt ${(vatRate * 100).toFixed(0)}%`, amount: taxes });
   } else if (subtotal < 0) {
     // For solar feed-in: VAT is on gross, paid back to customer.
-    taxes = Math.abs(subtotal) * vatRate;
+    taxes = -Math.abs(subtotal) * vatRate;
     lineItems.push({ label: `MwSt ${(vatRate * 100).toFixed(0)}% (Auszahlung)`, amount: taxes });
   }
 
