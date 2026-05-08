@@ -21,7 +21,7 @@ export default function HomePage() {
       <section className="hero">
         <div className="hero-bg">
           <Image
-            src="/logo.png"
+            src="/hero.png"
             alt=""
             fill
             sizes="(max-width: 1100px) 100vw, 1100px"
